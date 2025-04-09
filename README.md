@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Transport Management System
 
 A comprehensive solution for managing transport operations, including bus management, route planning, student management, payment tracking, and real-time location monitoring.
@@ -297,3 +298,6 @@ Project Link: [https://github.com/the-shoaib2/Transport-Management](https://gith
 - [Express](https://expressjs.com/)
 - [MySQL](https://www.mysql.com/)
 - [JWT](https://jwt.io/) 
+=======
+Hello
+>>>>>>> 8ff5da50d8173a4e01734141880850b4fc2469e1
