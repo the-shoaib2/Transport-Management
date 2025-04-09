@@ -4,6 +4,7 @@ import * as scheduleModel from '../models/scheduleModel.js';
 import * as studentModel from '../models/studentModel.js';
 import * as paymentModel from '../models/paymentModel.js';
 import * as locationModel from '../models/locationModel.js';
+import { connectToDatabase } from '../database/mysql.js';
 
 
 // Bus Management
@@ -750,6 +751,189 @@ export const getBusLocationHistory = async (req, res) => {
         res.status(500).json({ 
             status: 'error', 
             message: 'Failed to fetch bus location history' 
+        });
+    }
+};
+
+export const getDashboardStats = async (req, res) => {
+    try {
+        const connection = await connectToDatabase();
+        
+        // Get bus stats
+        const [busStats] = await connection.query(
+            `SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END) as maintenance,
+                SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive
+            FROM buses`
+        );
+        
+        // Get route stats
+        const [routeStats] = await connection.query(
+            `SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN is_active = false THEN 1 ELSE 0 END) as inactive
+            FROM routes`
+        );
+        
+        // Get schedule stats
+        const [scheduleStats] = await connection.query(
+            `SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) as scheduled,
+                SUM(CASE WHEN status = 'in-progress' THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
+            FROM schedules`
+        );
+        
+        // Get student stats
+        const [studentStats] = await connection.query(
+            `SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive,
+                SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) as suspended
+            FROM students`
+        );
+        
+        // Get payment stats
+        const [paymentStats] = await connection.query(
+            `SELECT 
+                COUNT(*) as total,
+                SUM(amount) as total_amount,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+            FROM payments`
+        );
+        
+        // Get recent payments (last 5)
+        const [recentPayments] = await connection.query(
+            `SELECT p.*, s.first_name, s.last_name 
+             FROM payments p
+             JOIN students s ON p.student_id = s.id
+             ORDER BY p.created_at DESC 
+             LIMIT 5`
+        );
+        
+        // Get upcoming schedules (next 5)
+        const [upcomingSchedules] = await connection.query(
+            `SELECT s.*, r.route_name, b.bus_nickname 
+             FROM schedules s
+             JOIN routes r ON s.route_id = r.id
+             JOIN buses b ON s.bus_id = b.id
+             WHERE s.departure_time > NOW() AND s.status = 'scheduled'
+             ORDER BY s.departure_time ASC
+             LIMIT 5`
+        );
+        
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                buses: busStats[0],
+                routes: routeStats[0],
+                schedules: scheduleStats[0],
+                students: studentStats[0],
+                payments: paymentStats[0],
+                recentPayments,
+                upcomingSchedules
+            }
+        });
+    } catch (error) {
+        console.error('Error getting dashboard stats:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Failed to get dashboard statistics'
+        });
+    }
+};
+
+export const getRevenueStats = async (req, res) => {
+    try {
+        const { period = 'monthly' } = req.query;
+        const connection = await connectToDatabase();
+        
+        let query;
+        let groupBy;
+        
+        switch(period) {
+            case 'daily':
+                groupBy = 'DATE(payment_date)';
+                break;
+            case 'weekly':
+                groupBy = 'YEARWEEK(payment_date, 1)';
+                break;
+            case 'monthly':
+            default:
+                groupBy = 'YEAR(payment_date), MONTH(payment_date)';
+                break;
+        }
+        
+        query = `
+            SELECT 
+                ${period === 'weekly' ? 'CONCAT(YEAR(payment_date), "-W", WEEK(payment_date, 1))' : 
+                  period === 'daily' ? 'DATE(payment_date)' : 
+                  'CONCAT(YEAR(payment_date), "-", MONTH(payment_date))'} as period,
+                SUM(amount) as revenue,
+                COUNT(*) as count
+            FROM payments
+            WHERE status = 'completed' AND payment_date >= DATE_SUB(CURDATE(), INTERVAL 12 ${period === 'daily' ? 'DAY' : period === 'weekly' ? 'WEEK' : 'MONTH'})
+            GROUP BY ${groupBy}
+            ORDER BY payment_date ASC
+        `;
+        
+        const [revenueData] = await connection.query(query);
+        
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                period,
+                revenue: revenueData
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error getting revenue stats:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Failed to get revenue statistics'
+        });
+    }
+};
+
+export const getMaintenanceStats = async (req, res) => {
+    try {
+        const connection = await connectToDatabase();
+        
+        // Get buses that need maintenance soon (next 7 days)
+        const [upcomingMaintenance] = await connection.query(
+            `SELECT * FROM buses
+             WHERE next_maintenance_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+             ORDER BY next_maintenance_date ASC`
+        );
+        
+        // Get buses currently in maintenance
+        const [inMaintenance] = await connection.query(
+            `SELECT * FROM buses
+             WHERE status = 'maintenance'
+             ORDER BY last_maintenance_date DESC`
+        );
+        
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                upcomingMaintenance,
+                inMaintenance
+            }
+        });
+    } catch (error) {
+        console.error('Error getting maintenance stats:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Failed to get maintenance statistics'
         });
     }
 };

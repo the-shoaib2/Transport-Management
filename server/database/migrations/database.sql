@@ -203,3 +203,8 @@ INSERT INTO payment_types (id, type_name, description) VALUES
 (UUID(), 'Annual Pass', 'Annual bus pass payment'),
 (UUID(), 'Single Trip', 'Payment for a single trip');
 
+
+
+
+
+

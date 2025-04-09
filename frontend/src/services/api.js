@@ -122,6 +122,12 @@ export const adminAPI = {
   getActiveLocations: () => api.get('/admin/locations/active'),
   getBusLocationHistory: (busId, startDate, endDate) => 
     api.get(`/admin/buses/${busId}/locations`, { params: { startDate, endDate } }),
+  
+  // Dashboard Statistics
+  getDashboardStats: () => api.get('/admin/dashboard/stats'),
+  getRevenueStats: (period = 'monthly') => 
+    api.get('/admin/dashboard/revenue', { params: { period } }),
+  getMaintenanceStats: () => api.get('/admin/dashboard/maintenance'),
 };
 
 export default api; 

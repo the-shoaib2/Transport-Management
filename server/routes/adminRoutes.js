@@ -51,4 +51,9 @@ router.get('/locations/active', adminController.getActiveLocations);
 router.get('/locations/bus/:busId', adminController.getBusLocation);
 router.get('/locations/bus/:busId/history', adminController.getBusLocationHistory);
 
+// Dashboard Statistics
+router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/dashboard/revenue', adminController.getRevenueStats);
+router.get('/dashboard/maintenance', adminController.getMaintenanceStats);
+
 export default router; 
