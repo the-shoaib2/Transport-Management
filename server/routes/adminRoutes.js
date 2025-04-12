@@ -20,6 +20,7 @@ router.post('/routes', adminController.createRoute);
 router.get('/routes', adminController.getAllRoutes);
 router.get('/routes/:routeId', adminController.getRouteById);
 router.put('/routes/:routeId', adminController.updateRoute);
+router.patch('/routes/:routeId/status', adminController.updateRouteStatus);
 router.delete('/routes/:routeId', adminController.deleteRoute);
 
 // Schedule Management

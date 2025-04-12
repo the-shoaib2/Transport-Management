@@ -196,6 +196,36 @@ CREATE TABLE IF NOT EXISTS user_tokens (
     INDEX idx_token_active (token, is_active)
 );
 
+-- blood_donors table
+CREATE TABLE IF NOT EXISTS blood_donors (
+    id CHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    phone VARCHAR(20) NOT NULL,
+    blood_group ENUM('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-') NOT NULL,
+    last_donation_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_donor_email (email),
+    INDEX idx_blood_group (blood_group)
+);
+
+-- blood_donations table
+CREATE TABLE IF NOT EXISTS blood_donations (
+    id CHAR(36) PRIMARY KEY,
+    donor_id CHAR(36) NOT NULL,
+    donation_date DATE NOT NULL,
+    amount_ml INT NOT NULL,
+    status ENUM('pending', 'completed', 'cancelled') DEFAULT 'pending',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (donor_id) REFERENCES blood_donors(id) ON DELETE CASCADE,
+    INDEX idx_donation_date (donation_date),
+    INDEX idx_donation_status (status)
+);
+
 -- Insert default payment types
 INSERT INTO payment_types (id, type_name, description) VALUES
 (UUID(), 'Monthly Pass', 'Monthly bus pass payment'),

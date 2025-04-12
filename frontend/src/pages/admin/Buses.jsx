@@ -29,6 +29,7 @@ const Buses = () => {
     try {
       setLoading(true);
       const response = await adminAPI.getAllBuses();
+      console.log(response);
       setBuses(Array.isArray(response.data?.data?.buses) ? response.data.data.buses : []);
     } catch (err) {
       console.error('Error fetching buses:', err);
@@ -110,11 +111,16 @@ const Buses = () => {
   const handleStatusChange = async (id, currentStatus) => {
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-      await adminAPI.updateBusStatus(id, { status: newStatus });
+      await adminAPI.updateBusStatus(id, newStatus);
       toast.success(`Bus status updated to ${newStatus}`);
-      fetchBuses();
+      setBuses(prevBuses => 
+        prevBuses.map(bus => 
+          bus.id === id ? { ...bus, status: newStatus } : bus
+        )
+      );
     } catch (err) {
-      toast.error('Failed to update bus status');
+      console.error('Error updating bus status:', err);
+      toast.error(err.response?.data?.message || 'Failed to update bus status');
     }
   };
 
@@ -198,10 +204,12 @@ const Buses = () => {
                   <td className="px-6 py-4">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        bus.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        bus.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
                       }`}
                     >
-                      {bus.status}
+                      {bus.status.charAt(0).toUpperCase() + bus.status.slice(1)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -213,7 +221,11 @@ const Buses = () => {
                     </button>
                     <button
                       onClick={() => handleStatusChange(bus.id, bus.status)}
-                      className="text-yellow-600 hover:text-yellow-900 mr-3 transition duration-150"
+                      className={`${
+                        bus.status === 'active'
+                          ? 'text-yellow-600 hover:text-yellow-900'
+                          : 'text-green-600 hover:text-green-900'
+                      } mr-3 transition duration-150`}
                     >
                       {bus.status === 'active' ? 'Deactivate' : 'Activate'}
                     </button>

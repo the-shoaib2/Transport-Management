@@ -23,10 +23,10 @@ export const ROLE_DEFINITIONS = [
 
 // Default admin user
 export const DEFAULT_ADMIN = {
-    firstName: 'MD Shoaib',
-    lastName: 'Khan',
+    firstName: 'Super',
+    lastName: 'Admin',
     username: 'admin',
-    email: 'the.shoaib@admin.com',
+    email: 'super@admin.com',
     password: 'admin123', // Change this in production
     role_id: ROLES.ADMIN
 };

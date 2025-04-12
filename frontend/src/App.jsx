@@ -12,6 +12,13 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
+// Service Pages
+import BusServices from './pages/services/BusServices';
+import StudentTransport from './pages/services/StudentTransport';
+import DriverServices from './pages/services/DriverServices';
+import PaymentStatus from './pages/services/PaymentStatus';
+import BloodDonation from './pages/services/BloodDonation';
+
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 import Buses from './pages/admin/Buses';
@@ -77,6 +84,13 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          
+          {/* Service Routes */}
+          <Route path="/services/bus" element={<BusServices />} />
+          <Route path="/services/student" element={<StudentTransport />} />
+          <Route path="/services/driver" element={<DriverServices />} />
+          <Route path="/services/payment-status" element={<PaymentStatus />} />
+          <Route path="/services/blood-donation" element={<BloodDonation />} />
         </Route>
 
         {/* Admin Routes */}

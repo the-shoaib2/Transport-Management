@@ -31,7 +31,7 @@ async function initializeDatabase() {
     console.log(`Using database '${process.env.DB_NAME}'`);
     
     // Read the SQL file
-    const sqlFilePath = path.join(__dirname, 'database.sql');
+    const sqlFilePath = path.join(__dirname, 'database', 'migrations', 'database.sql');
     const sqlContent = fs.readFileSync(sqlFilePath, 'utf8');
     
     // Remove the CREATE DATABASE and USE statements since we've already done that
@@ -45,6 +45,15 @@ async function initializeDatabase() {
     for (const command of sqlCommands) {
       if (command.trim()) {
         try {
+          // Skip the payment types insert if it's already been done
+          if (command.includes('INSERT INTO payment_types')) {
+            const [existingTypes] = await connection.query('SELECT COUNT(*) as count FROM payment_types');
+            if (existingTypes[0].count > 0) {
+              console.log('Payment types already exist, skipping insertion');
+              continue;
+            }
+          }
+          
           await connection.query(command);
           console.log('Executed SQL command successfully');
         } catch (err) {

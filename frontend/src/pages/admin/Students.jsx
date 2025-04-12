@@ -59,11 +59,32 @@ const Students = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Validate required fields
+      if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.address || !formData.grade || !formData.school) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
+
+      const studentData = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        grade: formData.grade,
+        school: formData.school,
+        parent_name: formData.parentName || null,
+        parent_phone: formData.parentPhone || null,
+        emergency_contact: formData.emergencyContact || null,
+        emergency_phone: formData.emergencyPhone || null,
+        status: formData.status
+      };
+
       if (isEdit) {
-        await adminAPI.updateStudent(currentStudent.id, formData);
+        await adminAPI.updateStudent(currentStudent.id, studentData);
         toast.success('Student updated successfully');
       } else {
-        await adminAPI.createStudent(formData);
+        await adminAPI.createStudent(studentData);
         toast.success('Student added successfully');
       }
       setShowModal(false);
@@ -71,7 +92,7 @@ const Students = () => {
       fetchStudents();
     } catch (err) {
       console.error('Error saving student:', err);
-      toast.error(isEdit ? 'Failed to update student' : 'Failed to add student');
+      toast.error(err.response?.data?.message || (isEdit ? 'Failed to update student' : 'Failed to add student'));
     }
   };
 
@@ -109,14 +130,19 @@ const Students = () => {
   };
 
   const handleStatusChange = async (id, currentStatus) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
     try {
-      await adminAPI.updateStudentStatus(id, newStatus);
-      toast.success(`Student status updated to ${newStatus}`);
-      fetchStudents();
+      const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+      const response = await adminAPI.updateStudentStatus(id, newStatus);
+      
+      if (response.status === 'success') {
+        toast.success(`Student status updated to ${newStatus}`);
+        fetchStudents(); // Refresh the student list
+      } else {
+        toast.error(response.message || 'Failed to update student status');
+      }
     } catch (err) {
       console.error('Error updating student status:', err);
-      toast.error('Failed to update student status');
+      toast.error(err.response?.data?.message || 'Failed to update student status');
     }
   };
 

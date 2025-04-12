@@ -57,8 +57,8 @@ export const createBus = async (req, res) => {
 
 export const getAllBuses = async (req, res) => {
     try {
-        const { page = 1, limit = 10 } = req.query;
-        const buses = await busModel.getAllBuses(parseInt(page), parseInt(limit));
+        // const { page = 1, limit = 1000 } = req.query;
+        const buses = await busModel.getAllBuses();
         res.status(200).json({
             status: 'success',
             data: { buses }
@@ -155,42 +155,47 @@ export const createRoute = async (req, res) => {
             estimated_time 
         } = req.body;
 
-        // Create start location if it doesn't exist
-        let start_location_id;
-        if (typeof start_location === 'object') {
-            start_location_id = await routeModel.createLocation(start_location);
-        } else {
-            start_location_id = start_location;
+        // Validate required fields
+        if (!route_name || !start_location || !end_location || !distance || !estimated_time) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Missing required fields: route_name, start_location, end_location, distance, and estimated_time are required'
+            });
         }
 
-        // Create end location if it doesn't exist
-        let end_location_id;
-        if (typeof end_location === 'object') {
-            end_location_id = await routeModel.createLocation(end_location);
-        } else {
-            end_location_id = end_location;
+        // Validate location objects
+        if (!start_location.name || !start_location.latitude || !start_location.longitude || !start_location.type) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid start location data'
+            });
         }
 
-        // Create the route with the location IDs
-        const routeId = await routeModel.createRoute({
+        if (!end_location.name || !end_location.latitude || !end_location.longitude || !end_location.type) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid end location data'
+            });
+        }
+
+        // Create the route with location objects
+        const route = await routeModel.createRoute({
             route_name,
-            start_location_id,
-            end_location_id,
+            start_location,
+            end_location,
             distance,
             estimated_time
         });
 
-        const route = await routeModel.getRouteById(routeId);
         res.status(201).json({
             status: 'success',
             data: { route }
         });
-    } catch (err) {
-        console.error('Create route error:', err);
+    } catch (error) {
+        console.error('Create route error:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Failed to create route',
-            details: err.message
+            message: 'Failed to create route'
         });
     }
 };
@@ -232,17 +237,90 @@ export const getRouteById = async (req, res) => {
 export const updateRoute = async (req, res) => {
     try {
         const { routeId } = req.params;
-        const updatedRoute = await routeModel.updateRoute(routeId, req.body);
+        const routeData = req.body;
+
+        // Validate route ID
+        if (!routeId) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Valid route ID is required'
+            });
+        }
+
+        // Validate numeric fields if they are provided
+        if (routeData.distance !== undefined && isNaN(routeData.distance)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Distance must be a number'
+            });
+        }
+
+        if (routeData.estimated_time !== undefined && isNaN(routeData.estimated_time)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Estimated time must be a number'
+            });
+        }
+
+        // Validate location format if provided
+        if (routeData.start_location_id !== undefined && !routeData.start_location_id.includes(',')) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid start location format. Expected format: latitude,longitude'
+            });
+        }
+
+        if (routeData.end_location_id !== undefined && !routeData.end_location_id.includes(',')) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid end location format. Expected format: latitude,longitude'
+            });
+        }
+
+        const updatedRoute = await routeModel.updateRoute(routeId, routeData);
+        
+        if (!updatedRoute) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Route not found'
+            });
+        }
+
         res.status(200).json({
             status: 'success',
-            data: { route: updatedRoute },
-            message: 'Route updated successfully'
+            data: { route: updatedRoute }
         });
-    } catch (err) {
-        console.error('Update route error:', err);
+    } catch (error) {
+        console.error('Error updating route:', error);
+        if (error.message === 'Route not found') {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Route not found'
+            });
+        }
         res.status(500).json({
             status: 'error',
             message: 'Failed to update route'
+        });
+    }
+};
+
+export const updateRouteStatus = async (req, res) => {
+    try {
+        const { routeId } = req.params;
+        const { status } = req.body;
+        await routeModel.updateRouteStatus(routeId, status);
+        const route = await routeModel.getRouteById(routeId);
+        res.status(200).json({
+            status: 'success',
+            data: { route },
+            message: 'Route status updated successfully'
+        });
+    } catch (err) {
+        console.error('Update route status error:', err);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to update route status'
         });
     }
 };
@@ -374,19 +452,50 @@ export const weeklySchedule = async (req, res) => {
 // Student Management
 export const createStudent = async (req, res) => {
     try {
+        const {
+            first_name,
+            last_name,
+            email,
+            phone,
+            address,
+            grade,
+            school,
+            parent_name,
+            parent_phone,
+            emergency_contact,
+            emergency_phone,
+            status = 'active'
+        } = req.body;
+
+        // Validate required fields
+        if (!first_name || !last_name || !email || !phone || !address || !grade || !school) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Missing required fields: first_name, last_name, email, phone, address, grade, and school are required'
+            });
+        }
+
+        // Validate field types
+        if (typeof first_name !== 'string' || typeof last_name !== 'string') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'First name and last name must be strings'
+            });
+        }
+
         const studentData = {
-            first_name: req.body.firstName,
-            last_name: req.body.lastName,
-            email: req.body.email,
-            phone: req.body.phone,
-            address: req.body.address,
-            grade: req.body.grade,
-            school: req.body.school,
-            parent_name: req.body.parentName,
-            parent_phone: req.body.parentPhone,
-            emergency_contact: req.body.emergencyContact,
-            emergency_phone: req.body.emergencyPhone,
-            status: 'active'
+            first_name: first_name.trim(),
+            last_name: last_name.trim(),
+            email: email.trim(),
+            phone: phone.trim(),
+            address: address.trim(),
+            grade: grade.trim(),
+            school: school.trim(),
+            parent_name: parent_name ? parent_name.trim() : null,
+            parent_phone: parent_phone ? parent_phone.trim() : null,
+            emergency_contact: emergency_contact ? emergency_contact.trim() : null,
+            emergency_phone: emergency_phone ? emergency_phone.trim() : null,
+            status
         };
 
         const studentId = await studentModel.createStudent(studentData);
@@ -549,28 +658,47 @@ export const deleteStudent = async (req, res) => {
 // Payment Management
 export const createPayment = async (req, res) => {
     try {
+        const {
+            student_id,
+            amount,
+            payment_date,
+            payment_method,
+            payment_type,
+            description
+        } = req.body;
+
+        // Check if student exists
+        const student = await studentModel.getStudentById(student_id);
+        if (!student) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Student not found'
+            });
+        }
+
         const paymentData = {
-            student_id: req.body.studentId,
-            amount: req.body.amount,
-            payment_date: req.body.paymentDate,
-            payment_method: req.body.paymentMethod,
-            payment_type: req.body.paymentType,
+            student_id,
+            amount: parseFloat(amount),
+            payment_date,
+            payment_method: payment_method.toLowerCase(),
+            payment_type: payment_type.toLowerCase(),
             status: 'pending',
-            description: req.body.description
+            description: description || null
         };
 
         const paymentId = await paymentModel.createPayment(paymentData);
         const payment = await paymentModel.getPaymentById(paymentId);
-        
+
         res.status(201).json({
             status: 'success',
-            data: { payment }
+            data: { payment },
+            message: 'Payment created successfully'
         });
     } catch (error) {
         console.error('Error creating payment:', error);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Failed to create payment' 
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to create payment'
         });
     }
 };
@@ -629,26 +757,19 @@ export const getPaymentById = async (req, res) => {
 export const updatePayment = async (req, res) => {
     try {
         const { paymentId } = req.params;
-        const paymentData = {
-            amount: req.body.amount,
-            payment_date: req.body.paymentDate,
-            payment_method: req.body.paymentMethod,
-            payment_type: req.body.paymentType,
-            description: req.body.description
-        };
+        const paymentData = req.body;
 
-        await paymentModel.updatePayment(paymentId, paymentData);
-        const payment = await paymentModel.getPaymentById(paymentId);
-        
+        const updatedPayment = await paymentModel.updatePayment(paymentId, paymentData);
         res.status(200).json({
             status: 'success',
-            data: { payment }
+            data: { payment: updatedPayment },
+            message: 'Payment updated successfully'
         });
     } catch (error) {
         console.error('Error updating payment:', error);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Failed to update payment' 
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to update payment'
         });
     }
 };
@@ -657,19 +778,29 @@ export const updatePaymentStatus = async (req, res) => {
     try {
         const { paymentId } = req.params;
         const { status } = req.body;
-        
-        await paymentModel.updatePaymentStatus(paymentId, status);
-        const payment = await paymentModel.getPaymentById(paymentId);
-        
+
+       
+
+        const updatedPayment = await paymentModel.updatePaymentStatus(paymentId, status);
+
+        if (!updatedPayment) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Payment not found'
+            });
+        }
+
         res.status(200).json({
             status: 'success',
-            data: { payment }
+            data: {
+                payment: updatedPayment
+            }
         });
     } catch (error) {
         console.error('Error updating payment status:', error);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Failed to update payment status' 
+        res.status(500).json({
+            status: 'error',
+            message: error.message || 'Failed to update payment status'
         });
     }
 };
@@ -759,92 +890,72 @@ export const getDashboardStats = async (req, res) => {
     try {
         const connection = await connectToDatabase();
         
-        // Get bus stats
-        const [busStats] = await connection.query(
-            `SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END) as maintenance,
-                SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive
-            FROM buses`
-        );
+        // Get total counts
+        const [buses] = await connection.query('SELECT COUNT(*) as total FROM buses');
+        const [routes] = await connection.query('SELECT COUNT(*) as total FROM routes');
+        const [schedules] = await connection.query('SELECT COUNT(*) as total FROM schedules');
+        const [students] = await connection.query('SELECT COUNT(*) as total FROM students');
+        const [payments] = await connection.query('SELECT COUNT(*) as total FROM payments');
         
-        // Get route stats
-        const [routeStats] = await connection.query(
-            `SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN is_active = false THEN 1 ELSE 0 END) as inactive
-            FROM routes`
-        );
+        // Get active counts
+        const [activeBuses] = await connection.query("SELECT COUNT(*) as total FROM buses WHERE status = 'active'");
+        const [activeRoutes] = await connection.query("SELECT COUNT(*) as total FROM routes WHERE is_active = true");
+        const [activeSchedules] = await connection.query("SELECT COUNT(*) as total FROM schedules WHERE status = 'scheduled'");
+        const [activeStudents] = await connection.query("SELECT COUNT(*) as total FROM students WHERE status = 'active'");
+        const [completedPayments] = await connection.query("SELECT COUNT(*) as total FROM payments WHERE status = 'completed'");
         
-        // Get schedule stats
-        const [scheduleStats] = await connection.query(
-            `SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) as scheduled,
-                SUM(CASE WHEN status = 'in-progress' THEN 1 ELSE 0 END) as in_progress,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
-            FROM schedules`
-        );
+        // Get recent payments
+        const [recentPayments] = await connection.query(`
+            SELECT p.*, s.first_name, s.last_name 
+            FROM payments p
+            JOIN students s ON p.student_id = s.id
+            ORDER BY p.created_at DESC 
+            LIMIT 5
+        `);
         
-        // Get student stats
-        const [studentStats] = await connection.query(
-            `SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive,
-                SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) as suspended
-            FROM students`
-        );
+        // Get upcoming schedules
+        const [upcomingSchedules] = await connection.query(`
+            SELECT s.*, r.route_name, b.bus_nickname 
+            FROM schedules s
+            JOIN routes r ON s.route_id = r.id
+            JOIN buses b ON s.bus_id = b.id
+            WHERE s.departure_time > NOW() AND s.status = 'scheduled'
+            ORDER BY s.departure_time ASC
+            LIMIT 5
+        `);
         
-        // Get payment stats
-        const [paymentStats] = await connection.query(
-            `SELECT 
-                COUNT(*) as total,
-                SUM(amount) as total_amount,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM payments`
-        );
-        
-        // Get recent payments (last 5)
-        const [recentPayments] = await connection.query(
-            `SELECT p.*, s.first_name, s.last_name 
-             FROM payments p
-             JOIN students s ON p.student_id = s.id
-             ORDER BY p.created_at DESC 
-             LIMIT 5`
-        );
-        
-        // Get upcoming schedules (next 5)
-        const [upcomingSchedules] = await connection.query(
-            `SELECT s.*, r.route_name, b.bus_nickname 
-             FROM schedules s
-             JOIN routes r ON s.route_id = r.id
-             JOIN buses b ON s.bus_id = b.id
-             WHERE s.departure_time > NOW() AND s.status = 'scheduled'
-             ORDER BY s.departure_time ASC
-             LIMIT 5`
-        );
-        
-        return res.status(200).json({
+        res.status(200).json({
             status: 'success',
             data: {
-                buses: busStats[0],
-                routes: routeStats[0],
-                schedules: scheduleStats[0],
-                students: studentStats[0],
-                payments: paymentStats[0],
+                overview: {
+                    buses: {
+                        total: buses[0].total,
+                        active: activeBuses[0].total
+                    },
+                    routes: {
+                        total: routes[0].total,
+                        active: activeRoutes[0].total
+                    },
+                    schedules: {
+                        total: schedules[0].total,
+                        active: activeSchedules[0].total
+                    },
+                    students: {
+                        total: students[0].total,
+                        active: activeStudents[0].total
+                    },
+                    payments: {
+                        total: payments[0].total,
+                        completed: completedPayments[0].total
+                    }
+                },
                 recentPayments,
                 upcomingSchedules
             }
         });
     } catch (error) {
         console.error('Error getting dashboard stats:', error);
-        return res.status(500).json({
+        res.status(500).json({
             status: 'error',
             message: 'Failed to get dashboard statistics'
         });
@@ -853,51 +964,41 @@ export const getDashboardStats = async (req, res) => {
 
 export const getRevenueStats = async (req, res) => {
     try {
-        const { period = 'monthly' } = req.query;
         const connection = await connectToDatabase();
         
-        let query;
-        let groupBy;
-        
-        switch(period) {
-            case 'daily':
-                groupBy = 'DATE(payment_date)';
-                break;
-            case 'weekly':
-                groupBy = 'YEARWEEK(payment_date, 1)';
-                break;
-            case 'monthly':
-            default:
-                groupBy = 'YEAR(payment_date), MONTH(payment_date)';
-                break;
-        }
-        
-        query = `
+        // Get monthly revenue
+        const [monthlyRevenue] = await connection.query(`
             SELECT 
-                ${period === 'weekly' ? 'CONCAT(YEAR(payment_date), "-W", WEEK(payment_date, 1))' : 
-                  period === 'daily' ? 'DATE(payment_date)' : 
-                  'CONCAT(YEAR(payment_date), "-", MONTH(payment_date))'} as period,
-                SUM(amount) as revenue,
-                COUNT(*) as count
+                DATE_FORMAT(payment_date, '%Y-%m') as month,
+                SUM(amount) as total
             FROM payments
-            WHERE status = 'completed' AND payment_date >= DATE_SUB(CURDATE(), INTERVAL 12 ${period === 'daily' ? 'DAY' : period === 'weekly' ? 'WEEK' : 'MONTH'})
-            GROUP BY ${groupBy}
-            ORDER BY payment_date ASC
-        `;
+            WHERE status = 'completed'
+            GROUP BY DATE_FORMAT(payment_date, '%Y-%m')
+            ORDER BY month DESC
+            LIMIT 6
+        `);
         
-        const [revenueData] = await connection.query(query);
+        // Get payment methods distribution
+        const [paymentMethods] = await connection.query(`
+            SELECT 
+                payment_method,
+                COUNT(*) as count,
+                SUM(amount) as total
+            FROM payments
+            WHERE status = 'completed'
+            GROUP BY payment_method
+        `);
         
-        return res.status(200).json({
+        res.status(200).json({
             status: 'success',
             data: {
-                period,
-                revenue: revenueData
+                monthlyRevenue,
+                paymentMethods
             }
         });
-        
     } catch (error) {
         console.error('Error getting revenue stats:', error);
-        return res.status(500).json({
+        res.status(500).json({
             status: 'error',
             message: 'Failed to get revenue statistics'
         });
@@ -908,30 +1009,36 @@ export const getMaintenanceStats = async (req, res) => {
     try {
         const connection = await connectToDatabase();
         
-        // Get buses that need maintenance soon (next 7 days)
-        const [upcomingMaintenance] = await connection.query(
-            `SELECT * FROM buses
-             WHERE next_maintenance_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
-             ORDER BY next_maintenance_date ASC`
-        );
+        // Get buses needing maintenance
+        const [maintenanceNeeded] = await connection.query(`
+            SELECT * FROM buses
+            WHERE next_maintenance_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+            ORDER BY next_maintenance_date ASC
+            LIMIT 5
+        `);
         
-        // Get buses currently in maintenance
-        const [inMaintenance] = await connection.query(
-            `SELECT * FROM buses
-             WHERE status = 'maintenance'
-             ORDER BY last_maintenance_date DESC`
-        );
+        // Get maintenance history
+        const [maintenanceHistory] = await connection.query(`
+            SELECT 
+                b.bus_nickname,
+                b.last_maintenance_date,
+                b.next_maintenance_date
+            FROM buses b
+            WHERE b.last_maintenance_date IS NOT NULL
+            ORDER BY b.last_maintenance_date DESC
+            LIMIT 5
+        `);
         
-        return res.status(200).json({
+        res.status(200).json({
             status: 'success',
             data: {
-                upcomingMaintenance,
-                inMaintenance
+                maintenanceNeeded,
+                maintenanceHistory
             }
         });
     } catch (error) {
         console.error('Error getting maintenance stats:', error);
-        return res.status(500).json({
+        res.status(500).json({
             status: 'error',
             message: 'Failed to get maintenance statistics'
         });

@@ -8,15 +8,16 @@ const Payments = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [currentPayment, setCurrentPayment] = useState(null);
   const [formData, setFormData] = useState({
-    studentId: '',
+    student_id: '',
     amount: '',
-    paymentDate: '',
-    paymentMethod: 'cash',
-    status: 'pending',
-    description: ''
+    payment_date: '',
+    payment_method: '',
+    payment_type: '',
+    status: '',
+    notes: ''
   });
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -67,33 +68,99 @@ const Payments = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (isEdit) {
-        await adminAPI.updatePayment(currentPayment.id, formData);
-        toast.success('Payment updated successfully');
-      } else {
-        await adminAPI.createPayment(formData);
-        toast.success('Payment added successfully');
-      }
-      setShowModal(false);
-      resetForm();
-      fetchPayments();
-    } catch (err) {
-      console.error('Error saving payment:', err);
-      toast.error(isEdit ? 'Failed to update payment' : 'Failed to add payment');
+        // For edit mode, check if any changes were made
+        if (isEditMode && currentPayment) {
+            const hasChanges = Object.keys(formData).some(key => {
+                // Special handling for amount to compare numbers
+                if (key === 'amount') {
+                    return parseFloat(formData[key]) !== parseFloat(currentPayment[key]);
+                }
+                // For other fields, compare as strings
+                return String(formData[key]) !== String(currentPayment[key]);
+            });
+
+            if (!hasChanges) {
+                toast.info('No changes were made');
+                setShowModal(false);
+                return;
+            }
+
+            // For edit mode, just submit the changes without validation
+            await adminAPI.updatePayment(currentPayment.id, { ...formData, isEdit: true });
+            toast.success('Payment updated successfully');
+        } else {
+            // For new payments, validate all required fields
+            if (!formData.student_id || !formData.amount || !formData.payment_date || 
+                !formData.payment_method || !formData.payment_type) {
+                toast.error('Please fill in all required fields');
+                return;
+            }
+
+            // Validate amount is a positive number
+            if (isNaN(formData.amount) || formData.amount <= 0) {
+                toast.error('Amount must be a positive number');
+                return;
+            }
+
+            // Validate payment method
+            const validPaymentMethods = ['cash', 'credit_card', 'debit_card', 'bank_transfer'];
+            if (!validPaymentMethods.includes(formData.payment_method.toLowerCase())) {
+                toast.error('Invalid payment method');
+                return;
+            }
+
+            // Validate payment type
+            const validPaymentTypes = ['monthly', 'quarterly', 'yearly', 'one-time'];
+            if (!validPaymentTypes.includes(formData.payment_type.toLowerCase())) {
+                toast.error('Invalid payment type');
+                return;
+            }
+
+            await adminAPI.createPayment(formData);
+            toast.success('Payment created successfully');
+        }
+
+        // Refresh payments list
+        fetchPayments();
+        // Reset form and close modal
+        setFormData({
+            student_id: '',
+            amount: '',
+            payment_date: '',
+            payment_method: '',
+            payment_type: '',
+            status: '',
+            notes: ''
+        });
+        setIsEditMode(false);
+        setCurrentPayment(null);
+        setShowModal(false);
+    } catch (error) {
+        console.error('Error submitting payment:', error);
+        toast.error(error.response?.data?.message || 'Failed to process payment');
     }
   };
 
   const handleEdit = (payment) => {
+    if (!payment || !payment.id) {
+        toast.error('Invalid payment data');
+        return;
+    }
+
+    // Format the date to YYYY-MM-DD for the date input
+    const formattedDate = payment.payment_date ? new Date(payment.payment_date).toISOString().split('T')[0] : '';
+
     setCurrentPayment(payment);
+    setIsEditMode(true);
     setFormData({
-      studentId: payment.student_id,
-      amount: payment.amount,
-      paymentDate: payment.payment_date,
-      paymentMethod: payment.payment_method,
-      status: payment.status,
-      description: payment.description
+        student_id: payment.student_id || '',
+        amount: payment.amount || '',
+        payment_date: formattedDate,
+        payment_method: payment.payment_method || '',
+        payment_type: payment.payment_type || '',
+        status: payment.status || '',
+        notes: payment.notes || ''
     });
-    setIsEdit(true);
     setShowModal(true);
   };
 
@@ -110,28 +177,53 @@ const Payments = () => {
     }
   };
 
-  const handleStatusChange = async (id, currentStatus) => {
-    const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
+  const handleStatusChange = async (paymentId, newStatus) => {
     try {
-      await adminAPI.updatePaymentStatus(id, newStatus);
-      toast.success(`Payment status updated to ${newStatus}`);
-      fetchPayments();
-    } catch (err) {
-      console.error('Error updating payment status:', err);
-      toast.error('Failed to update payment status');
+      console.log('handleStatusChange called with:', { paymentId, newStatus }); // Debug log
+
+      // Validate payment ID
+      if (!paymentId || typeof paymentId !== 'string') {
+        toast.error('Valid payment ID is required');
+        return;
+      }
+
+      // Validate status
+      if (!newStatus || typeof newStatus !== 'string') {
+        toast.error('Valid status is required');
+        return;
+      }
+
+      // Validate status against valid values
+      const validStatuses = ['pending', 'completed', 'failed', 'refunded'];
+      if (!validStatuses.includes(newStatus.toLowerCase())) {
+        toast.error('Invalid payment status');
+        return;
+      }
+
+      // Call the API to update the status
+      const response = await adminAPI.updatePaymentStatus(paymentId, newStatus);
+      
+      if (response) {
+        toast.success('Payment status updated successfully');
+        fetchPayments(); // Refresh the payments list
+      }
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      toast.error(error.message || 'Failed to update payment status');
     }
   };
 
   const resetForm = () => {
     setFormData({
-      studentId: '',
+      student_id: '',
       amount: '',
-      paymentDate: '',
-      paymentMethod: 'cash',
-      status: 'pending',
-      description: ''
+      payment_date: '',
+      payment_method: '',
+      payment_type: '',
+      status: '',
+      notes: ''
     });
-    setIsEdit(false);
+    setIsEditMode(false);
     setCurrentPayment(null);
   };
 
@@ -215,7 +307,7 @@ const Payments = () => {
                       Edit
                     </button>
                     <button
-                      onClick={() => handleStatusChange(payment.id, payment.status)}
+                      onClick={() => handleStatusChange(payment.id, payment.status === 'completed' ? 'pending' : 'completed')}
                       className="text-yellow-600 hover:text-yellow-900 mr-3"
                     >
                       {payment.status === 'completed' ? 'Mark Pending' : 'Mark Completed'}
@@ -240,7 +332,7 @@ const Payments = () => {
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
-                {isEdit ? 'Edit Payment' : 'Add New Payment'}
+                {isEditMode ? 'Edit Payment' : 'Add New Payment'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-2 gap-6">
@@ -299,11 +391,26 @@ const Payments = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                       required
                     >
-                      <option value="">Select payment method</option>
-                      <option value="Cash">Cash</option>
-                      <option value="Credit Card">Credit Card</option>
-                      <option value="Debit Card">Debit Card</option>
-                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="cash">Cash</option>
+                      <option value="credit_card">Credit Card</option>
+                      <option value="debit_card">Debit Card</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Payment Type</label>
+                    <select
+                      id="payment_type"
+                      name="payment_type"
+                      value={formData.payment_type}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      required
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                      <option value="one-time">One-time</option>
                     </select>
                   </div>
                   <div className="col-span-2">
@@ -331,7 +438,7 @@ const Payments = () => {
                     type="submit"
                     className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
                   >
-                    {isEdit ? 'Update' : 'Add'} Payment
+                    {isEditMode ? 'Update' : 'Add'} Payment
                   </button>
                 </div>
               </form>

@@ -3,17 +3,18 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const createStudent = async (studentData) => {
     const { 
-        firstName, 
-        lastName, 
+        first_name, 
+        last_name, 
         email, 
         phone, 
         address, 
         grade, 
         school, 
-        parentName, 
-        parentPhone, 
-        emergencyContact, 
-        emergencyPhone 
+        parent_name, 
+        parent_phone, 
+        emergency_contact, 
+        emergency_phone,
+        status = 'active'
     } = studentData;
 
     const id = uuidv4();
@@ -22,12 +23,12 @@ export const createStudent = async (studentData) => {
         `INSERT INTO students (
             id, first_name, last_name, email, phone, address, 
             grade, school, parent_name, parent_phone, 
-            emergency_contact, emergency_phone
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            emergency_contact, emergency_phone, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-            id, firstName, lastName, email, phone, address,
-            grade, school, parentName, parentPhone,
-            emergencyContact, emergencyPhone
+            id, first_name, last_name, email, phone, address,
+            grade, school, parent_name, parent_phone,
+            emergency_contact, emergency_phone, status
         ]
     );
     return id;

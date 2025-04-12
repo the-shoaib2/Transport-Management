@@ -107,4 +107,15 @@ export const getBusSchedule = async (busId, date) => {
         ORDER BY s.departure_time
     `, [busId, date]);
     return rows;
+};
+
+export const updateBusStatus = async (id, status) => {
+    const db = await connectToDatabase();
+    await db.query(
+        `UPDATE buses 
+         SET status = ?
+         WHERE id = ?`,
+        [status, id]
+    );
+    return await getBusById(id);
 }; 
