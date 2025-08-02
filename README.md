@@ -74,7 +74,7 @@ Before you begin, ensure you have the following installed:
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/transport-management-system.git
+git clone https://github.com/the-shoaib2/Transport-Management.git
 cd transport-management-system
 ```
 
