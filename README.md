@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Transport Management System
 
 A comprehensive solution for managing transport operations, including bus management, route planning, student management, payment tracking, and real-time location monitoring.
